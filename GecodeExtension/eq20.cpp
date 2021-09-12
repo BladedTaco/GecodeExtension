@@ -151,7 +151,7 @@ public:
 int
 main(int argc, char* argv[]) {
     //for (int i = 0; i < 20; i++) {
-    for (auto const b : { Eq20::PROP_LINEAR, Eq20::PROP_MODULO }) {
+    for (auto const b : { Eq20::PROP_MODULO, Eq20::PROP_LINEAR }) {
         std::cout << (b == Eq20::PROP_LINEAR ? "Linear" : "Modulo") << std::endl;
         Options opt("Eq20");
         opt.propagation(b);

@@ -8,6 +8,7 @@
 #include "PrettyText.h"
 
 #define DEBUG true
+#define SHORT_CIRCUIT true
 
 // function courtesy of https://www.techiedelight.com/extended-euclidean-algorithm-implementation/
 // Recursive function to demonstrate the extended Euclidean algorithm.
@@ -266,6 +267,7 @@ namespace Mod {
         PP("New Propagation", { TextF::BOLD, TextF::C_CYAN });
         std::cout << COL_1 << "RHS == " << RHS << std::endl;
 #endif
+
         // init vars
         int g = INT_MAX;
         std::vector<ModInfo> l;
@@ -289,7 +291,7 @@ namespace Mod {
 #endif
                 }
             } else {
-
+                // update gcd of old terms
                 for (ModInfo& _l : l) {
                     _l.g = gcd(_l.g, ax_i.a);
                 }
@@ -348,27 +350,85 @@ namespace Mod {
             const int bg = b / g;
             const int ucg = pmod(u * c / g, bg);
 
+            // no point doing anything with % 1, we already know we are working with integers
+            if (bg != 1) {
 #if DEBUG
-            // _l.a _l.x = s    [ under % _l.g; ]
-            std::cout << std::endl << a << " * x" << _l.ax->p << " == " << c << " % " << b << COL_1
-                << "x" << _l.ax->p << " == " << ucg << " % " << bg << std::endl; 
+                // _l.a _l.x = s    [ under % _l.g; ]
+                std::cout << std::endl << a << " * x" << _l.ax->p << " == " << c << " % " << b << COL_1
+                    << "x" << _l.ax->p << " == " << ucg << " % " << bg << std::endl; 
 
-            // domain before restriction
-            std::cout << _l.ax->x << COL_1;
+                // domain before restriction
+                std::cout << _l.ax->x << COL_1;
 #endif
 
             // intersect domain with modulus constraint
-            auto i = ModInter<Int::IntView>(ucg, bg, _l.ax->x.min(), _l.ax->x.max());
-            _l.ax->x.inter_v(home, i, true);
+                auto i = ModInter<Int::IntView>(ucg, bg, _l.ax->x.min(), _l.ax->x.max());
+                _l.ax->x.inter_v(home, i, true);
 
 #if DEBUG
-            // domain after restriction
-            std::cout << _l.ax->x << std::endl;
+                // domain after restriction
+                std::cout << _l.ax->x << std::endl;
 #endif
+            }
         }
 
         // return solution found if all x_i are assigned
         if (x.assigned()) return ES_OK;
+
+#if SHORT_CIRCUIT
+        bool short_circuit = true;
+        int zero_or_fulfill = -1;
+        int fulfill_only = -1;
+        // if there is term that can be set to make RHS 0, and everything else can be set to 0
+        // for each term
+        for (ModTerm& ax_i : x) {
+            // if its unassigned
+            if (!ax_i.x.assigned()) {
+                // if it can make RHS 0
+                if (RHS % ax_i.a == 0 && RHS / ax_i.a <= ax_i.x.max()) {
+                    // if it can also be 0
+                    if (ax_i.x.in(0)) {
+                        zero_or_fulfill = ax_i.p;
+                    // can only fulfill
+                    } else {
+                        // if something else can also only fulfill
+                        if (fulfill_only != -1) {
+                            // fail short circuiting
+                            short_circuit = false;
+                            break;
+                        } else {
+                            // only one fulfill_only allowed
+                            fulfill_only = ax_i.p;
+                        }
+                    }
+                // cannot make RHS 0, or be 0
+                } else if (!ax_i.x.in(0)) {
+                    // fail short circuiting
+                    short_circuit = false;
+                    break;
+                }
+            }
+        }
+        if (short_circuit) {
+            // get variable to assign
+            auto i = fulfill_only != -1
+                ? fulfill_only
+                : zero_or_fulfill;
+                
+            // assign it
+            auto _ax = &x[i];
+            _ax->x.eq(home, RHS / _ax->a);
+               
+            // set all others to 0
+            for (ModTerm& ax_i : x) {
+                if (!ax_i.x.assigned()) {
+                     ax_i.x.eq(home, 0);
+                }
+            }
+            // return finished
+            return ES_OK;
+        }
+#endif
 
         // otherwise return a fixpoint, the propagator only needs to run once per variable assignment
         return ES_FIX;
