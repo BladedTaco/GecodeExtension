@@ -5,6 +5,10 @@
 #include <vector>
 #include <tuple>
 
+#include "PrettyText.h"
+
+#define DEBUG true
+
 // function courtesy of https://www.techiedelight.com/extended-euclidean-algorithm-implementation/
 // Recursive function to demonstrate the extended Euclidean algorithm.
 // It returns multiple values using tuple in C++.
@@ -29,6 +33,10 @@ int gcd(int a, int b) {
     if (b == INT_MAX) return a;
     return Int::Linear::gcd(a, b);
 };
+
+inline int pmod(int a, int b) {
+    return ((a % b) + b) % b;
+}
 
 namespace Mod {
     class ModTerm : public Int::Linear::Term<Int::IntView> {
@@ -62,7 +70,7 @@ namespace Mod {
 
 using TView = Mod::ModTerm;
 using TArray = ViewArray<Mod::ModTerm>;
-using NProp = NaryPropagator<TView, Int::PC_INT_BND>;
+using NProp = NaryPropagator<TView, Int::PC_INT_VAL>;
 
 namespace Mod {
 
@@ -70,8 +78,15 @@ namespace Mod {
     struct ModInfo {
         TView* ax;
         int g;
-        ModInfo(TView _ax, int _g) : ax(&_ax), g(_g) {};
+        ModInfo(TView* _ax, int _g) : ax(_ax), g(_g) {};
     };
+
+
+    //// class for mod info view
+    //class ModView : public Int::IntView {
+
+    //};
+
 
     // class for modulo domain restriction
     template <class I>
@@ -104,7 +119,7 @@ namespace Mod {
         /// Default constructor
         ModInter(void);
         /// x = n % m
-        ModInter(int n, int m);
+        ModInter(int _off, int _mod, int _min, int _max);
         ModInter(const ModInter &other);
         /// Initialize with value iterator \a i
         void init(const I& i0);
@@ -136,14 +151,15 @@ namespace Mod {
 
     template <class I>
     forceinline
-        ModInter<I>::ModInter(int _off, int _mod)
+        ModInter<I>::ModInter(int _off, int _mod, int _min, int _max)
         :   off(_off),
             mod(_mod),
-            md(_mod - 1),
-            n(_off),
-            start(_off),
-            end(_off)
-        {}
+            md(_mod - 1)
+        {
+            n = lastMod(_min) + _off;
+            start = n;
+            end = nextMod(_max);
+        }
 
     template <class I>
     forceinline
@@ -219,16 +235,16 @@ namespace Mod {
         if (ax.size() == 0)
             return ES_FAILED;
 
-        // Do initial propagation
-        //  Restrict all domains
-        //   check if any coefficients are negative
-        // bool all_pos = true;
-        //for (auto const &ax_i : ax) if (ax_i.a < 0) { all_pos = false; break; }
-        // restrict domains
-        /*for (auto ax_i : ax) {
-            GECODE_ME_CHECK(ax_i.x.gq(home, 0));
-            if (all_pos) GECODE_ME_CHECK(ax_i.x.lq(home, c / ax_i.a));
-        }*/
+        // check if all coefficients and domains are non-negative
+        bool all_pos = true;
+        for (auto const &ax_i : ax) if (ax_i.a < 0 || ax_i.x.min() < 0) { all_pos = false; break; }
+        // restrict domains if there is nothing negative
+        if (all_pos) {
+            for (auto& ax_i : ax) {
+                GECODE_ME_CHECK(ax_i.x.gq(home, 0));
+                GECODE_ME_CHECK(ax_i.x.lq(home, c / ax_i.a));
+            }
+        }
 
         // test if no propagator needs to be posted
         if (!ax.assigned())
@@ -242,10 +258,16 @@ namespace Mod {
 
     // Propagate
     ExecStatus Modulo::propagate(Space& home, const ModEventDelta& modEv) {
-        std::cout << "RHS == " << RHS << std::endl;
+#if DEBUG
+        // print out inital RHS
+        std::cout << std::endl;
+        PP("-------------------------", { TextF::INVERTED });
+        std::cout << std::endl;
+        PP("New Propagation", { TextF::BOLD, TextF::C_CYAN });
+        std::cout << COL_1 << "RHS == " << RHS << std::endl;
+#endif
         // init vars
         int g = INT_MAX;
-        //ArgArray<ModInfo> l;
         std::vector<ModInfo> l;
         int n = x.size();
         // for each variable
@@ -253,26 +275,52 @@ namespace Mod {
             // if variable set
             if (ax_i.x.assigned() || ax_i.a == 0) {
                 if (ax_i.a != 0) {
-                    std::cout << "x" << ax_i.p << " assigned to " << ax_i.x << std::endl;
                     // reduce right side by coefficient * variable
                     RHS -= ax_i.a * ax_i.x.val();
                     ax_i.a = 0;
+
+#if DEBUG
+                    // print out assignment
+                    std::stringstream os;
+                    os << "x" << ax_i.p << " assigned to " << ax_i.x;
+                    PP(os.str(), { TextF::BOLD, TextF::C_MAGENTA });
+                    // print out RHS
+                    std::cout << COL_1 << "RHS == " << RHS << std::endl;
+#endif
                 }
             } else {
-                // add in variables modulo information
-                std::vector<ModInfo> l2;
-                l2.push_back(ModInfo(ax_i, g));
-                // reappend all modulo information where gcd > 1
-                for (ModInfo &_l : l) {
+
+                for (ModInfo& _l : l) {
                     _l.g = gcd(_l.g, ax_i.a);
-                    if (_l.g > 1) l2.push_back(_l);
                 }
-                l = l2;
+
+                // add current
+                l.push_back(ModInfo(&ax_i, g));
+
+                // remove those where gcd == 1
+                l.erase(
+                    std::remove_if(
+                        l.begin(),
+                        l.end(),
+                        [](const ModInfo &element) -> bool {
+                            return element.g <= 1;
+                        }
+                    ),
+                    l.end()
+                );
 
                 // update gcd
                 g = gcd(g, ax_i.a);
-
-                std::cout << g << ", " << std::endl;;
+#if DEBUG
+                // print out GCD
+                std::cout << "gcd == " << g << COL_1
+                // print out modInfo array
+                    << "[";
+                for (ModInfo& _l : l) {
+                    std::cout << "(" << _l.ax->a << " * x" << _l.ax->p << ", " << _l.g << ") ";
+                }
+                std::cout << "]" << std::endl;
+#endif
             }
         }
         
@@ -281,47 +329,48 @@ namespace Mod {
         
         // propagate
         for (ModInfo const &_l : l) {
+
+            if (_l.g == INT_MAX) {
+                _l.ax->x.eq(home, RHS / _l.ax->a);
+                continue;
+            }
+
+            // in ModInfo
+            const int a = _l.ax->a;
+            const int b = _l.g;
+            const int c = pmod(RHS, b);
+
+            // bezouts
+            int g, u, v;
+            std::tie(g, u, v) = ::extended_gcd(a, b);
+
+            // out ModInfo
+            const int bg = b / g;
+            const int ucg = pmod(u * c / g, bg);
+
+#if DEBUG
             // _l.a _l.x = s    [ under % _l.g; ]
-            std::cout << _l.ax->a << "*" << _l.ax->x << "== 0 %" << _l.g << std::endl;
+            std::cout << std::endl << a << " * x" << _l.ax->p << " == " << c << " % " << b << COL_1
+                << "x" << _l.ax->p << " == " << ucg << " % " << bg << std::endl; 
 
-            g = _l.g;
-            const int c = ((RHS % g) + g) % g;
+            // domain before restriction
+            std::cout << _l.ax->x << COL_1;
+#endif
 
-            int b, u, v;
-            std::tie(b, u, v) = ::extended_gcd(_l.ax->a, c);
+            // intersect domain with modulus constraint
+            auto i = ModInter<Int::IntView>(ucg, bg, _l.ax->x.min(), _l.ax->x.max());
+            _l.ax->x.inter_v(home, i, true);
 
-            //if (c % g != 0) return ES_FAILED; // already checked
-
-            auto i = ModInter<Int::IntView>((u * c / g), (b / g));
-            _l.ax->x.inter_r(home, i, false);
-               
-
-            std::cout << _l.ax->x << "== " << (u * c / g) << " %" << (b / g) << std::endl;;
+#if DEBUG
+            // domain after restriction
+            std::cout << _l.ax->x << std::endl;
+#endif
         }
 
-        //if (modEv > -10) {
-        //   return propagate(home, modEv - 1);
-        //} 
+        // return solution found if all x_i are assigned
+        if (x.assigned()) return ES_OK;
 
-        //if (x.assigned()) return ES_OK;
-
-        //if (l.size() == x.size()) return ES_FIX;
-
-        ////// Post linear for when mod fails
-        ////IntArgs _a;
-        ////IntVarArgs _x;
-        ////for (auto ax_i : x) {
-        ////    _a << ax_i.a;
-        ////    _x << ax_i.x;
-        ////}
-        ////linear(home, _a, _x, IRT_EQ, c);
-
-        //return home.ES_SUBSUMED(*this);
-
-        //if (l.size() == 0) return ES_NOFIX;
-
-        //return ES_NOFIX;
-
+        // otherwise return a fixpoint, the propagator only needs to run once per variable assignment
         return ES_FIX;
     }
 };
@@ -354,13 +403,10 @@ void modulo(Home home, const IntArgs& a, const IntVarArgs& x, int c, IntPropLeve
         j++;
     }
 
-    ax[0].x.eq(home, 1);
-    ax[2].x.eq(home, 2);
-    ax[4].x.eq(home, 2);
-
-
     // Post Propagator
     GECODE_ES_FAIL(Mod::Modulo::post(home, ax, IRT_EQ, c));
+    linear(home, a, x, IRT_EQ, c);
+    
 }
 
 
