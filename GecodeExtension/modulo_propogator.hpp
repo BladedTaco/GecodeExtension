@@ -8,7 +8,8 @@
 #include "PrettyText.h"
 
 #define DEBUG true
-#define SHORT_CIRCUIT true
+#define SHORT_CIRCUIT false
+#define LIMIT_DOMAIN false
 
 // function courtesy of https://www.techiedelight.com/extended-euclidean-algorithm-implementation/
 // Recursive function to demonstrate the extended Euclidean algorithm.
@@ -42,6 +43,10 @@ inline int pmod(int a, int b) {
 namespace Mod {
     class ModTerm : public Int::Linear::Term<Int::IntView> {
     public:
+        using Int::Linear::Term<Int::IntView>::x;
+        using Int::Linear::Term<Int::IntView>::p;
+        using Int::Linear::Term<Int::IntView>::a;
+    public:
         // View
         void subscribe(Space& home, Propagator& p, PropCond pc, bool schedule = true) {
             x.subscribe(home, p, pc, schedule);
@@ -60,6 +65,8 @@ namespace Mod {
         }
         void update(Space& home, ModTerm& y) {
             x.update(home, y.x);
+            a = y.a;
+            p = y.p;
         }
 
         // optional
@@ -79,7 +86,7 @@ namespace Mod {
     struct ModInfo {
         TView* ax;
         int g;
-        ModInfo(TView* _ax, int _g) : ax(_ax), g(_g) {};
+        ModInfo(TView& _ax, int _g) : ax(&_ax), g(_g) {};
     };
 
 
@@ -222,8 +229,15 @@ namespace Mod {
         virtual ExecStatus propagate(Space& home, const ModEventDelta& med);
         // Post propagator
         static  ExecStatus post(Space& home, TArray& ax, IntRelType irt, int c);
+
+        // cost function
+        virtual PropCost cost(const Space& home, const ModEventDelta& med) const override;
     };
 
+    // cost, lie to make this go first
+    PropCost Modulo::cost(const Space&, const ModEventDelta&) const {
+        return PropCost::unary(PropCost::LO);
+    }
 
     // Copy
     Actor* Modulo::copy(Space& home) {
@@ -236,6 +250,7 @@ namespace Mod {
         if (ax.size() == 0)
             return ES_FAILED;
 
+#if LIMIT_DOMAIN
         // check if all coefficients and domains are non-negative
         bool all_pos = true;
         for (auto const &ax_i : ax) if (ax_i.a < 0 || ax_i.x.min() < 0) { all_pos = false; break; }
@@ -246,11 +261,14 @@ namespace Mod {
                 GECODE_ME_CHECK(ax_i.x.lq(home, c / ax_i.a));
             }
         }
+#endif
 
         // test if no propagator needs to be posted
-        if (!ax.assigned())
+        if (!ax.assigned()) {
             // post propagator
             (void) new (home) Modulo(home, ax, c);
+            //home.status();
+        }
 
         // return completion
         return ES_OK;
@@ -267,20 +285,18 @@ namespace Mod {
         PP("New Propagation", { TextF::BOLD, TextF::C_CYAN });
         std::cout << COL_1 << "RHS == " << RHS << std::endl;
 #endif
-
         // init vars
         int g = INT_MAX;
         std::vector<ModInfo> l;
         int n = x.size();
         // for each variable
         for (ModTerm &ax_i : x) {
-            // if variable set
-            if (ax_i.x.assigned() || ax_i.a == 0) {
-                if (ax_i.a != 0) {
+            // reduce RHS by newly assigned vars
+            if (ax_i.x.assigned()) {
+                if (ax_i.x.assigned() && ax_i.a != 0) {
                     // reduce right side by coefficient * variable
                     RHS -= ax_i.a * ax_i.x.val();
                     ax_i.a = 0;
-
 #if DEBUG
                     // print out assignment
                     std::stringstream os;
@@ -290,6 +306,7 @@ namespace Mod {
                     std::cout << COL_1 << "RHS == " << RHS << std::endl;
 #endif
                 }
+            // if variable not set
             } else {
                 // update gcd of old terms
                 for (ModInfo& _l : l) {
@@ -297,7 +314,7 @@ namespace Mod {
                 }
 
                 // add current
-                l.push_back(ModInfo(&ax_i, g));
+                l.push_back(ModInfo(ax_i, g));
 
                 // remove those where gcd == 1
                 l.erase(
@@ -465,6 +482,8 @@ void modulo(Home home, const IntArgs& a, const IntVarArgs& x, int c, IntPropLeve
 
     // Post Propagator
     GECODE_ES_FAIL(Mod::Modulo::post(home, ax, IRT_EQ, c));
+
+    branch(home, x, INT_VAR_SIZE_MIN(), INT_VAL_MIN());
     linear(home, a, x, IRT_EQ, c);
     
 }
