@@ -110,7 +110,7 @@ public:
         //int b[x_n+1] = {4095, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048};
         //int b[x_n+1] = {9, 19, 15, 14, 12, 8};
         //int b[x_n + 1] = { 26, 5, 6, 3 };
-        int b[x_n + 1] = { 1523, 254, 1243, 354, 234, 53};
+        int b[x_n + 1] = { 1000, 2, 4, 8, 16, 222};
         IntArgs c(x_n, &b[1]);
         if (opt.propagation() == PROP_MODULO) {
             modulo(*this, c, x, b[0], opt.ipl());

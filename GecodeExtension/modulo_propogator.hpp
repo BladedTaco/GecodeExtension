@@ -48,11 +48,21 @@ inline int pmod(int a, int b) {
 }
 
 namespace Mod {
+    // struct for mod domains
+    struct ModDomain {
+        int off;
+        int mod;
+        ModDomain(int _off, int _mod) : off(_off), mod(_mod) {};
+        ModDomain() : off(0), mod(1) {};
+    };
+
+
     class ModTerm : public Int::Linear::Term<Int::IntView> {
     public:
         using Int::Linear::Term<Int::IntView>::x;
         using Int::Linear::Term<Int::IntView>::p;
         using Int::Linear::Term<Int::IntView>::a;
+        ModDomain modDom;
     public:
         // View
         void subscribe(Space& home, Propagator& p, PropCond pc, bool schedule = true) {
@@ -74,6 +84,7 @@ namespace Mod {
             x.update(home, y.x);
             a = y.a;
             p = y.p;
+            modDom = y.modDom;
         }
 
         // optional
@@ -88,21 +99,11 @@ using TArray = ViewArray<Mod::ModTerm>;
 using NProp = NaryPropagator<TView, Int::PC_INT_VAL>;
 
 namespace Mod {
-    // struct for mod domains
-    struct ModDomain {
-        int off;
-        int mod;
-        ModDomain(int _off, int _mod) : off(_off), mod(_mod) {};
-        ModDomain() : off(0), mod(1) {};
-    };
-
     // struct for modulo information
     struct ModInfo {
         TView* ax;
         int g;
-        ModDomain curr;
-        ModInfo(TView& _ax, int _g) : ax(&_ax), g(_g), curr(ModDomain()) {};
-        ModInfo(TView& _ax, int _g, ModDomain _curr) : ax(&_ax), g(_g), curr(_curr) {};
+        ModInfo(TView& _ax, int _g) : ax(&_ax), g(_g) {};
     };
 
 
@@ -354,7 +355,7 @@ namespace Mod {
                 std::cout << "gcd == " << g << COL_1
                 // print out modInfo array
                     << "[";
-                for (ModInfo& _l : l) {
+                for (ModInfo const & _l : l) {
                     std::cout << "(" << _l.ax->a << " * x" << _l.ax->p << ", " << _l.g << ") ";
                 }
                 std::cout << "]" << std::endl;
@@ -367,7 +368,7 @@ namespace Mod {
         if (RHS % g != 0) return ES_FAILED; //fail
 
         // propagate
-        for (ModInfo &_l : l) {
+        for (ModInfo const &_l : l) {
 
             if (_l.g == INT_MAX) {
                 _l.ax->x.eq(home, RHS / _l.ax->a);
@@ -395,24 +396,25 @@ namespace Mod {
                     << "x" << _l.ax->p << " == " << ucg << " % " << bg << std::endl; 
 
                 // domain before restriction
-                std::cout << _l.ax->x << COL_1;
+                std::cout << _l.ax->x << " -> ";
 #endif
                
 #if ADV_MOD
-                if (_l.curr.mod != bg && _l.curr.mod != 1) {
+                ModDomain md = _l.ax->modDom;
+                if (md.mod != bg && md.mod != 1) {
 #if DEBUG
-                // _l.a _l.x = s    [ under % _l.g; ]
-                std::cout << std::endl << COL_1
-                    << "x" << _l.ax->p << " == " << _l.curr.off << " % " << _l.curr.mod << std::endl;
-
-                // domain before restriction
-                std::cout << _l.ax->x << COL_1;
+                    std::cout << std::endl;
+                    PP("Advanced Modulo Propagation", { TextF::C_GREEN });
+                    // x = n /\ x = m  [under mod a, b]
+                    std::cout << std::endl << "x" << _l.ax->p << " == " 
+                        << md.off << " % " << md.mod << " && "
+                        << COL_1 << ucg << " % " << bg;
 #endif
                     // set/get variables
                     int a, m, n;
-                    a = _l.curr.off;
+                    a = md.off;
                     //b = _l.g;
-                    m = _l.curr.mod;
+                    m = md.mod;
                     n = bg;
                     std::tie(g, u, v) = ::extended_gcd(a, b);
 
@@ -422,16 +424,18 @@ namespace Mod {
                         const int ucg = pmod((a * v * n + b * u * m) / g, bg);
 
 #if DEBUG
-                        // _l.a _l.x = s    [ under % _l.g; ]
-                        std::cout << std::endl << a << " * x" << _l.ax->p << " == " << c << " % " << b << COL_1
+                        // _l.x = s    [ under % _l.g; ]
+                        std::cout << std::endl 
                             << "x" << _l.ax->p << " == " << ucg << " % " << bg << std::endl;
 
                         // domain before restriction
-                        std::cout << _l.ax->x << COL_1;
+                        PP("End Advanced Modulo Propagation", { TextF::DC_GREEN });
+                        std::cout << std::endl;
 #endif
                     } else {
-
-                        std::cout << " No Intersection " << std::endl;
+                        PP(" No Intersection ", { C_RED });
+                        std::cout << std::endl;
+                        return ES_FAILED;
                     }
                 }
 #endif
@@ -446,12 +450,12 @@ namespace Mod {
                 dom(home, _l.ax->x, i.min(), i.max());
 #endif
 
-                _l.curr = ModDomain(ucg, bg);
+                _l.ax->modDom = ModDomain(ucg, bg);
 
 
 #if DEBUG
                 // domain after restriction
-                std::cout << _l.ax->x << std::endl;
+                std::cout << COL_1  <<  _l.ax->x << std::endl;
 #endif
             }
         }
