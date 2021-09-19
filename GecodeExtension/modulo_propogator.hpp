@@ -7,9 +7,16 @@
 
 #include "PrettyText.h"
 
+
 #define DEBUG true
 #define SHORT_CIRCUIT false
 #define LIMIT_DOMAIN false
+#define ADV_MOD true
+
+// enums weren't doing highlighting, sooooo....
+// 0 == set
+// 1 == domain
+#define DOM_TYPE 1
 
 // function courtesy of https://www.techiedelight.com/extended-euclidean-algorithm-implementation/
 // Recursive function to demonstrate the extended Euclidean algorithm.
@@ -81,12 +88,21 @@ using TArray = ViewArray<Mod::ModTerm>;
 using NProp = NaryPropagator<TView, Int::PC_INT_VAL>;
 
 namespace Mod {
+    // struct for mod domains
+    struct ModDomain {
+        int off;
+        int mod;
+        ModDomain(int _off, int _mod) : off(_off), mod(_mod) {};
+        ModDomain() : off(0), mod(1) {};
+    };
 
     // struct for modulo information
     struct ModInfo {
         TView* ax;
         int g;
-        ModInfo(TView& _ax, int _g) : ax(&_ax), g(_g) {};
+        ModDomain curr;
+        ModInfo(TView& _ax, int _g) : ax(&_ax), g(_g), curr(ModDomain()) {};
+        ModInfo(TView& _ax, int _g, ModDomain _curr) : ax(&_ax), g(_g), curr(_curr) {};
     };
 
 
@@ -106,12 +122,15 @@ namespace Mod {
     private:
         int lastMod(int m) const {
             // get last multiple of mod from m
-            return ((m + md) / mod) * mod - mod;
-            //return (m | md) - md; powers of 2 only
+            return (m - off) % mod == 0
+                ? m
+                : ((m - off + md) / mod) * mod + off - mod;
         }
         int nextMod(int m) const {
             // get next multiple of mod from m
-            return ((m + md) / mod) * mod;
+            return (m - off) % mod == 0
+                ? m
+                : ((m - off + md) / mod) * mod + off;
             //return (m | md) + 1; powers of 2 only
         }
 
@@ -164,9 +183,9 @@ namespace Mod {
             mod(_mod),
             md(_mod - 1)
         {
-            n = lastMod(_min) + _off;
+            n = nextMod(_min);
             start = n;
-            end = nextMod(_max);
+            end = lastMod(_max);
         }
 
     template <class I>
@@ -250,6 +269,7 @@ namespace Mod {
         if (ax.size() == 0)
             return ES_FAILED;
 
+
 #if LIMIT_DOMAIN
         // check if all coefficients and domains are non-negative
         bool all_pos = true;
@@ -267,7 +287,6 @@ namespace Mod {
         if (!ax.assigned()) {
             // post propagator
             (void) new (home) Modulo(home, ax, c);
-            //home.status();
         }
 
         // return completion
@@ -344,10 +363,11 @@ namespace Mod {
         }
         
         // check for failure
+        if (g == 1) return ES_FIX;
         if (RHS % g != 0) return ES_FAILED; //fail
-        
+
         // propagate
-        for (ModInfo const &_l : l) {
+        for (ModInfo &_l : l) {
 
             if (_l.g == INT_MAX) {
                 _l.ax->x.eq(home, RHS / _l.ax->a);
@@ -377,10 +397,57 @@ namespace Mod {
                 // domain before restriction
                 std::cout << _l.ax->x << COL_1;
 #endif
+               
+#if ADV_MOD
+                if (_l.curr.mod != bg && _l.curr.mod != 1) {
+#if DEBUG
+                // _l.a _l.x = s    [ under % _l.g; ]
+                std::cout << std::endl << COL_1
+                    << "x" << _l.ax->p << " == " << _l.curr.off << " % " << _l.curr.mod << std::endl;
 
-            // intersect domain with modulus constraint
+                // domain before restriction
+                std::cout << _l.ax->x << COL_1;
+#endif
+                    // set/get variables
+                    int a, m, n;
+                    a = _l.curr.off;
+                    //b = _l.g;
+                    m = _l.curr.mod;
+                    n = bg;
+                    std::tie(g, u, v) = ::extended_gcd(a, b);
+
+                    if (a == a * b % g) {
+                        // out ModInfo
+                        const int bg = m * n / g;
+                        const int ucg = pmod((a * v * n + b * u * m) / g, bg);
+
+#if DEBUG
+                        // _l.a _l.x = s    [ under % _l.g; ]
+                        std::cout << std::endl << a << " * x" << _l.ax->p << " == " << c << " % " << b << COL_1
+                            << "x" << _l.ax->p << " == " << ucg << " % " << bg << std::endl;
+
+                        // domain before restriction
+                        std::cout << _l.ax->x << COL_1;
+#endif
+                    } else {
+
+                        std::cout << " No Intersection " << std::endl;
+                    }
+                }
+#endif
+
+                // intersect domain with modulus constraint
                 auto i = ModInter<Int::IntView>(ucg, bg, _l.ax->x.min(), _l.ax->x.max());
+                //std::cout << i.min() << " " << i.max() << std::endl;
+#if DOM_TYPE == 0
                 _l.ax->x.inter_v(home, i, true);
+                mod(home, _l.ax->x, IntVar(home, ucg, ucg), IntVar(home, bg, bg));
+#elif DOM_TYPE == 1
+                dom(home, _l.ax->x, i.min(), i.max());
+#endif
+
+                _l.curr = ModDomain(ucg, bg);
+
 
 #if DEBUG
                 // domain after restriction
@@ -446,7 +513,7 @@ namespace Mod {
             return ES_OK;
         }
 #endif
-
+        PP("End Propagation", {TextF::DC_CYAN});
         // otherwise return a fixpoint, the propagator only needs to run once per variable assignment
         return ES_FIX;
     }
@@ -467,7 +534,7 @@ void modulo(Home home, const IntArgs& a, const IntVarArgs& x, int c, IntPropLeve
 
     // Turn a[] and x[] into ax[]
     //TArray ax(home, x.size());
-    TArray ax(home, j);
+    TArray ax(home, j+1);
     j = 0;
     for (int i = 0; i < x.size(); i++) {
         if (a[i] == 0) {
@@ -480,12 +547,15 @@ void modulo(Home home, const IntArgs& a, const IntVarArgs& x, int c, IntPropLeve
         j++;
     }
 
+    // post linear propagator
+    linear(home, a, x, IRT_EQ, c);
+
+    // THIS IS A HACK, assign a variable to instantly start propagation before branching
+    ax[j].x = IntVar(home, 0, 0);
+
     // Post Propagator
     GECODE_ES_FAIL(Mod::Modulo::post(home, ax, IRT_EQ, c));
 
-    branch(home, x, INT_VAR_SIZE_MIN(), INT_VAL_MIN());
-    linear(home, a, x, IRT_EQ, c);
-    
 }
 
 

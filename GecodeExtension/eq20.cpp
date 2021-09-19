@@ -51,8 +51,8 @@ private:
     /// Number of variables
     //static const int x_n = 7;
     //static const int x_n = 12; //bin
-    static const int x_n = 4; 
-    //static const int x_n = 5;
+    //static const int x_n = 3; 
+    static const int x_n = 5;
     //static const int x_n = 20;
     /// Number of equations
     //static const int e_n = 20;
@@ -68,7 +68,7 @@ public:
 
     /// The actual problem
     Eq20(const Options& opt)
-        : Script(opt), x(*this, x_n, 0, 10) {
+        : Script(opt), x(*this, x_n, 0, 100) {
         // Coefficients and constants for the equations
         //int eqs[e_n][x_n + 1] = {
         //  //z    =  a*x1 + b*x2 + c*x3 + d*x4 + e*x5 + f*x6 + g*x7
@@ -109,8 +109,8 @@ public:
         // [0..2]
         //int b[x_n+1] = {4095, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048};
         //int b[x_n+1] = {9, 19, 15, 14, 12, 8};
-        // TODO THIS IS A HACK
-        int b[x_n + 1] = { 26, 1000, 5, 6, 3 };
+        //int b[x_n + 1] = { 26, 5, 6, 3 };
+        int b[x_n + 1] = { 1523, 254, 1243, 354, 234, 53};
         IntArgs c(x_n, &b[1]);
         if (opt.propagation() == PROP_MODULO) {
             modulo(*this, c, x, b[0], opt.ipl());
@@ -118,8 +118,7 @@ public:
             linear(*this, c, x, IRT_EQ, b[0], opt.ipl());
         }
 
-        if (opt.propagation() == PROP_MODULO);// branch(*this, x, INT_VAR_SIZE_MIN(), INT_VAL_MED());
-        else                                    branch(*this, x, INT_VAR_NONE(), INT_VAL_MED());
+        branch(*this, x, INT_VAR_NONE(), INT_VAL_MIN());
         //for (int i = e_n; i--; ) {
 
         //    IntArgs c(x_n, &eqs[i][1]);
@@ -154,11 +153,12 @@ public:
 int
 main(int argc, char* argv[]) {
     //for (int i = 0; i < 20; i++) {
-    for (auto const b : { Eq20::PROP_MODULO, Eq20::PROP_LINEAR }) {
+    //for (auto const b : { Eq20::PROP_MODULO, Eq20::PROP_LINEAR }) {
+    for (auto const b : { Eq20::PROP_LINEAR, Eq20::PROP_MODULO }) {
         std::cout << (b == Eq20::PROP_LINEAR ? "Linear" : "Modulo") << std::endl;
         Options opt("Eq20");
         opt.propagation(b);
-        opt.solutions(20);
+        opt.solutions(10);
         opt.iterations(10000);
         opt.parse(argc, argv);
         Script::run<Eq20, DFS, Options>(opt);
