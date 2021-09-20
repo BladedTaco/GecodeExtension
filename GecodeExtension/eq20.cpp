@@ -52,7 +52,7 @@ private:
     //static const int x_n = 7;
     //static const int x_n = 12; //bin
     //static const int x_n = 3; 
-    static const int x_n = 5;
+    static const int x_n = 4;
     //static const int x_n = 20;
     /// Number of equations
     //static const int e_n = 20;
@@ -110,7 +110,8 @@ public:
         //int b[x_n+1] = {4095, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048};
         //int b[x_n+1] = {9, 19, 15, 14, 12, 8};
         //int b[x_n + 1] = { 26, 5, 6, 3 };
-        int b[x_n + 1] = { 1000, 2, 4, 8, 16, 222};
+        //int b[x_n + 1] = { 1000, 2, 4, 8, 16, 222 };
+        int b[x_n + 1] = { 999, 15, 3, 30, 60};
         IntArgs c(x_n, &b[1]);
         if (opt.propagation() == PROP_MODULO) {
             modulo(*this, c, x, b[0], opt.ipl());
@@ -153,8 +154,8 @@ public:
 int
 main(int argc, char* argv[]) {
     //for (int i = 0; i < 20; i++) {
-    //for (auto const b : { Eq20::PROP_MODULO, Eq20::PROP_LINEAR }) {
-    for (auto const b : { Eq20::PROP_LINEAR, Eq20::PROP_MODULO }) {
+    for (auto const b : { Eq20::PROP_MODULO, Eq20::PROP_LINEAR }) {
+    //for (auto const b : { Eq20::PROP_LINEAR, Eq20::PROP_MODULO }) {
         std::cout << (b == Eq20::PROP_LINEAR ? "Linear" : "Modulo") << std::endl;
         Options opt("Eq20");
         opt.propagation(b);

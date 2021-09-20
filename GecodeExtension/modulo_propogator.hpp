@@ -8,10 +8,12 @@
 #include "PrettyText.h"
 
 
+//#define DEBUG false
 #define DEBUG true
 #define SHORT_CIRCUIT false
 #define LIMIT_DOMAIN false
 #define ADV_MOD true
+#define DBL_BOUND false
 
 // enums weren't doing highlighting, sooooo....
 // 0 == set
@@ -87,6 +89,7 @@ namespace Mod {
             modDom = y.modDom;
         }
 
+
         // optional
         bool assigned() {
             return x.assigned();
@@ -97,6 +100,7 @@ namespace Mod {
 using TView = Mod::ModTerm;
 using TArray = ViewArray<Mod::ModTerm>;
 using NProp = NaryPropagator<TView, Int::PC_INT_VAL>;
+using NPropDom = NaryPropagator<TView, Int::PC_INT_DOM>;
 
 namespace Mod {
     // struct for modulo information
@@ -148,7 +152,8 @@ namespace Mod {
         ModInter(void);
         /// x = n % m
         ModInter(int _off, int _mod, int _min, int _max);
-        ModInter(const ModInter &other);
+        ModInter(const ModInter& other);
+        ModInter(const TView* t);
         /// Initialize with value iterator \a i
         void init(const I& i0);
         //@}
@@ -201,6 +206,33 @@ namespace Mod {
     {}
 
     template <class I>
+    forceinline
+        ModInter<I>::ModInter(const TView* t)
+        : off(t->modDom.off),
+        mod(t->modDom.mod),
+        md(t->modDom.mod - 1)
+    {
+        // basic end value
+        end = lastMod(t->x.max());
+
+        // get n/start
+        n = nextMod(t->x.min());
+        while (end > n && !t->x.in(n)) {
+            // increase n by mod until its in domain or past the end
+            n += mod;
+        }
+        start = n;
+
+        // get end using same method as above but flipped
+        while (start < end && !t->x.in(end)) {
+            end -= mod;
+        }
+
+        // check for domain overlap
+        if (end < start) end = start;
+    };
+
+    template <class I>
     forceinline void
     ModInter<I>::init(const I& i0) {
         n = lastMod(i0.min()) + off;
@@ -225,7 +257,7 @@ namespace Mod {
         return n;
     }
 
-    //             Array | a*x terms | Propagate on Domain Change
+    //             Array | a*x terms | Propagate on View Assignment
     class Modulo : public NProp {
     protected:
         using NProp::x;
@@ -369,6 +401,7 @@ namespace Mod {
 
         // propagate
         for (ModInfo const &_l : l) {
+            int a, b, c, g, u, v, bg, ucg, m, n;
 
             if (_l.g == INT_MAX) {
                 _l.ax->x.eq(home, RHS / _l.ax->a);
@@ -376,17 +409,16 @@ namespace Mod {
             }
 
             // in ModInfo
-            const int a = _l.ax->a;
-            const int b = _l.g;
-            const int c = pmod(RHS, b);
+            a = _l.ax->a;
+            b = _l.g;
+            c = pmod(RHS, b);
 
             // bezouts
-            int g, u, v;
             std::tie(g, u, v) = ::extended_gcd(a, b);
 
             // out ModInfo
-            const int bg = b / g;
-            const int ucg = pmod(u * c / g, bg);
+            bg = b / g;
+            ucg = pmod(u * c / g, bg);
 
             // no point doing anything with % 1, we already know we are working with integers
             if (bg != 1) {
@@ -411,21 +443,30 @@ namespace Mod {
                         << COL_1 << ucg << " % " << bg;
 #endif
                     // set/get variables
-                    int a, m, n;
                     a = md.off;
-                    //b = _l.g;
+                    b = ucg;
                     m = md.mod;
                     n = bg;
-                    std::tie(g, u, v) = ::extended_gcd(a, b);
+                    std::tie(g, u, v) = ::extended_gcd(m, n);
 
                     if (a == a * b % g) {
                         // out ModInfo
-                        const int bg = m * n / g;
-                        const int ucg = pmod((a * v * n + b * u * m) / g, bg);
+                        bg = m * n / g;
+                        ucg = pmod((a * v * n + b * u * m) / g, bg);
 
 #if DEBUG
                         // _l.x = s    [ under % _l.g; ]
-                        std::cout << std::endl 
+                        std::cout << std::endl
+                            << "x" << _l.ax->p << " == " << ucg << " % " << bg << std::endl;
+
+                        // domain before restriction
+                        PP("End Advanced Modulo Propagation", { TextF::DC_GREEN });
+                        std::cout << std::endl;
+#endif
+                    } else if (m % n == 0 || n % m == 0) {
+#if DEBUG
+                        // _l.x = s    [ under % _l.g; ]
+                        std::cout << std::endl
                             << "x" << _l.ax->p << " == " << ucg << " % " << bg << std::endl;
 
                         // domain before restriction
@@ -441,8 +482,8 @@ namespace Mod {
 #endif
 
                 // intersect domain with modulus constraint
-                auto i = ModInter<Int::IntView>(ucg, bg, _l.ax->x.min(), _l.ax->x.max());
-                //std::cout << i.min() << " " << i.max() << std::endl;
+                _l.ax->modDom = ModDomain(ucg, bg);
+                auto i = ModInter<Int::IntView>(_l.ax);
 #if DOM_TYPE == 0
                 _l.ax->x.inter_v(home, i, true);
                 mod(home, _l.ax->x, IntVar(home, ucg, ucg), IntVar(home, bg, bg));
@@ -450,12 +491,18 @@ namespace Mod {
                 dom(home, _l.ax->x, i.min(), i.max());
 #endif
 
-                _l.ax->modDom = ModDomain(ucg, bg);
-
 
 #if DEBUG
                 // domain after restriction
                 std::cout << COL_1  <<  _l.ax->x << std::endl;
+#endif
+            } else {
+#if DEBUG
+                // domain after restriction
+                std::stringstream os;
+                os << "x" << _l.ax->p << " is " << ucg << " mod " << bg;
+                PP(os.str(), { C_GRAY });
+                std::cout << std::endl;
 #endif
             }
         }
@@ -521,6 +568,104 @@ namespace Mod {
         // otherwise return a fixpoint, the propagator only needs to run once per variable assignment
         return ES_FIX;
     }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Propagator for bounds update
+    //             Array | a*x terms | Propagate on Domain Change
+    class ModuloDomain : public NPropDom {
+    protected:
+        using NPropDom::x;
+
+        // Constructors
+        // Construct Propagator
+        ModuloDomain(Home home, TArray ax)
+            : NPropDom(home, ax) {}
+        // Clone Propagator
+        ModuloDomain(Space& home, ModuloDomain& p)
+            : NPropDom(home, p) {}
+    public:
+        // Constructor for rewriting p during cloning
+        ModuloDomain(Space& home, Propagator& p, TArray& ax)
+            : NPropDom(home, p, ax) {};
+
+        // Copy propagator during cloning
+        virtual Actor* copy(Space& home);
+        // Perform propagation
+        virtual ExecStatus propagate(Space& home, const ModEventDelta& med);
+        // Post propagator
+        static  ExecStatus post(Space& home, TArray& ax);
+
+        // cost function
+        virtual PropCost cost(const Space& home, const ModEventDelta& med) const override;
+    };
+
+    // cost, lie to make this go first
+    PropCost ModuloDomain::cost(const Space&, const ModEventDelta&) const {
+        return PropCost::unary(PropCost::LO);
+    }
+
+    // Copy
+    Actor* ModuloDomain::copy(Space& home) {
+        return new (home) ModuloDomain(home, *this);
+    }
+
+    // Post
+    ExecStatus ModuloDomain::post(Space& home, TArray& ax) {
+        // Fail on empty terms
+        if (ax.size() == 0)
+            return ES_FAILED;
+
+        // test if no propagator needs to be posted
+        if (!ax.assigned()) {
+            // post propagator
+            (void) new (home) ModuloDomain(home, ax);
+        }
+
+        // return completion
+        return ES_OK;
+    }
+
+
+    // Propagate
+    ExecStatus ModuloDomain::propagate(Space& home, const ModEventDelta& modEv) {
+#if DEBUG
+        // print out update
+        std::cout << std::endl;
+        PP("-------------------------", { TextF::INVERTED });
+        std::cout << std::endl;
+        PP("Bounds Update", { TextF::BOLD, TextF::C_YELLOW });
+        std::cout << std::endl;
+#endif
+        // intersect domain with modulus constraint
+        for (ModTerm const &_l : x) {
+            // check for update
+            if (
+                _l.x.min() % _l.modDom.mod != _l.modDom.off
+             || _l.x.max() % _l.modDom.mod != _l.modDom.off
+            ) {
+
+#if DEBUG
+                // print out update
+                std::cout << "x" << _l.p << " == " << _l.modDom.off << " % " << _l.modDom.mod << std::endl;
+                std::cout << _l.x << " -> " << COL_1;
+#endif
+
+                // perform update
+                auto i = ModInter<Int::IntView>(_l.modDom.off, _l.modDom.mod, _l.x.min(), _l.x.max());
+                dom(home, _l.x, i.min(), i.max());
+
+#if DEBUG
+                // print out update
+                std::cout << _l.x << std::endl;
+#endif
+
+            }
+        }
+        
+        // return fixpoint
+        return ES_FIX;
+    }
 };
 
 void modulo(Home home, const IntArgs& a, const IntVarArgs& x, int c, IntPropLevel ipl) {
@@ -559,7 +704,9 @@ void modulo(Home home, const IntArgs& a, const IntVarArgs& x, int c, IntPropLeve
 
     // Post Propagator
     GECODE_ES_FAIL(Mod::Modulo::post(home, ax, IRT_EQ, c));
+#if DBL_BOUND
+    GECODE_ES_FAIL(Mod::ModuloDomain::post(home, ax));
+#endif
 
 }
-
 
