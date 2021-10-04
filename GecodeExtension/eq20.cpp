@@ -35,8 +35,12 @@
 #include <gecode/int.hh>
 
 #include "modulo_propogator.hpp"
+#include "modulo-Instances.hh"
 
 using namespace Gecode;
+
+static int domains[2];
+static std::vector<std::vector<int>> a_is;
 
 /**
  * \brief %Example: Solving 20 linear equations
@@ -60,6 +64,10 @@ private:
     static const int e_n = 1;
     /// Variables
     IntVarArray x;
+    IntArgs a;
+    int id = 0;
+
+    static std::vector<Eq20*> instances;
 public:
     enum {
         PROP_LINEAR,  ///< Use regular constraints
@@ -68,7 +76,7 @@ public:
 
     /// The actual problem
     Eq20(const Options& opt)
-        : Script(opt), x(*this, x_n, 0, 100) {
+        : Script(opt) {
         // Coefficients and constants for the equations
         //int eqs[e_n][x_n + 1] = {
         //  //z    =  a*x1 + b*x2 + c*x3 + d*x4 + e*x5 + f*x6 + g*x7
@@ -111,17 +119,87 @@ public:
         //int b[x_n+1] = {9, 19, 15, 14, 12, 8};
         //int b[x_n + 1] = { 26, 5, 6, 3 };
         //int b[x_n + 1] = { 1000, 2, 4, 8, 16, 222 };
-        int b[x_n + 1] = { 999, 15, 3, 30, 60};
-        IntArgs c(x_n, &b[1]);
-        if (opt.propagation() == PROP_MODULO) {
-            modulo(*this, c, x, b[0], opt.ipl());
-        } else { //if (opt.propagation() == PROP_LINEAR) {
-            linear(*this, c, x, IRT_EQ, b[0], opt.ipl());
+        //int b[x_n + 1] = { 999, 15, 3, 30, 60};
+        //IntArgs c(x_n, &b[1]);
+        //if (opt.propagation() == PROP_MODULO) {
+        //    modulo(*this, c, x, b[0], opt.ipl());
+        //} else { //if (opt.propagation() == PROP_LINEAR) {
+        //    linear(*this, c, x, IRT_EQ, b[0], opt.ipl());
+        //}
+        
+        std::cout << a_is.size() << std::endl;
+        std::cout << domains << std::endl;
+
+
+        const int x_n = a_is[0].size() - 1;
+        x = IntVarArray(*this, x_n, domains[0], domains[1]);
+        for (auto ai : a_is) {
+            IntArgs c(x_n, &ai[1]);
+            if (opt.propagation() == PROP_MODULO) {
+                modulo(*this, c, x, ai[0], opt.ipl());
+            } else { //if (opt.propagation() == PROP_LINEAR) {
+                linear(*this, c, x, IRT_EQ, ai[0], opt.ipl());
+            }
         }
-
         branch(*this, x, INT_VAR_NONE(), INT_VAL_MIN());
-        //for (int i = e_n; i--; ) {
 
+
+        //auto const tests = generate_tests(RANDOM, 1);
+
+        //// init vars
+        //int eq_num = 1;
+        //int eq_counter = 1;
+        //int domains[2] = { 0, 100 };
+        //int term_num = 0;
+        //std::vector<int> test_results;
+        //// run the tests
+        //for (auto const& test : tests) {
+        //    switch (test.size()) {
+        //        // reset id
+        //    case 0:
+        //        id = 0;
+        //        break;
+        //        // update equation number per post
+        //    case 1:
+        //        eq_num = test[0];
+        //        break;
+        //        // update domain
+        //    case 2:
+        //        domains[0] = test[0];
+        //        domains[1] = test[1];
+        //        break;
+        //        // new post
+        //    default:
+        //        // get number of terms
+        //        term_num = test.size() - 1;
+
+        //        // if new equation set
+        //        if (eq_counter == 1) {
+        //            // generate new x var array
+        //            x = IntVarArray(*this, term_num, domains[0], domains[1]);
+        //        }
+
+        //        // get unique parameters for posting
+        //        a = IntArgs(term_num, &test[1]);
+        //        if (opt.propagation() == PROP_MODULO) {
+        //            modulo(*this, a, x, test[0], opt.ipl());
+        //        } else { //if (opt.propagation() == PROP_LINEAR) {
+        //            linear(*this, a, x, IRT_EQ, test[0], opt.ipl());
+        //        }
+        //        branch(*this, x, INT_VAR_NONE(), INT_VAL_MIN());
+
+
+        //        // handle equation set counting
+        //        eq_num == eq_counter
+        //            ? eq_counter = 1
+        //            : eq_counter++;
+        //        // handle id
+        //        id++;
+        //        break;
+        //    }
+        //}
+
+        //for (int i = e_n; i--; ) {
         //    IntArgs c(x_n, &eqs[i][1]);
         //    if (opt.propagation() == PROP_MODULO) {
         //        modulo(*this, c, x, eqs[i][0], opt.ipl());
@@ -148,23 +226,67 @@ public:
 
 };
 
+
+void run_tests(const Options& opt) {
+    auto const tests = generate_tests(RANDOM, 1);
+
+    // init vars
+    int eq_num = 1;
+    int eq_counter = 0;
+    int term_num = 0;
+    // run the tests
+    for (auto const& test : tests) {
+        switch (test.size()) {
+            // reset id
+        case 0:
+            //id = 0;
+            break;
+            // update equation number per post
+        case 1:
+            eq_num = test[0];
+            break;
+            // update domain
+        case 2:
+            domains[0] = test[0];
+            domains[1] = test[1];
+            break;
+            // new post
+        default:
+            // get number of terms
+            term_num = test.size() - 1;
+
+            a_is.push_back(test);
+            // if new equation set
+            if (eq_num == ++eq_counter) {
+                eq_counter = 0;
+
+                Script::run<Eq20, DFS, Options>(opt);
+
+                a_is.clear();
+            }
+
+            break;
+        }
+    }
+}
+
 /** \brief Main-function
  *  \relates Eq20
  */
 int
 main(int argc, char* argv[]) {
-    //for (int i = 0; i < 20; i++) {
-    for (auto const b : { Eq20::PROP_MODULO, Eq20::PROP_LINEAR }) {
-    //for (auto const b : { Eq20::PROP_LINEAR, Eq20::PROP_MODULO }) {
-        std::cout << (b == Eq20::PROP_LINEAR ? "Linear" : "Modulo") << std::endl;
-        Options opt("Eq20");
-        opt.propagation(b);
-        opt.solutions(10);
-        opt.iterations(10000);
-        opt.parse(argc, argv);
-        Script::run<Eq20, DFS, Options>(opt);
+    for (int i = 1; i <= 1000; i <<= 2) {
+        for (auto const b : { Eq20::PROP_MODULO, Eq20::PROP_LINEAR }) {
+        //for (auto const b : { Eq20::PROP_LINEAR, Eq20::PROP_MODULO }) {
+            std::cout << (b == Eq20::PROP_LINEAR ? "Linear" : "Modulo") << std::endl;
+            Options opt("Eq20");
+            opt.propagation(b);
+            opt.solutions(i);
+            opt.iterations(10000);
+            opt.parse(argc, argv);
+            run_tests(opt);
+        }
     }
-    //}
     return 0;
 }
 

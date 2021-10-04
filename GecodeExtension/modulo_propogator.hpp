@@ -500,7 +500,7 @@ namespace Mod {
 #if DEBUG
                 // domain after restriction
                 std::stringstream os;
-                os << "x" << _l.ax->p << " is " << ucg << " mod " << bg;
+                os << "x" << _l.ax->p << " is " << ucg << " mod " << bg << COL_1 << _l.ax->x;
                 PP(os.str(), { C_GRAY });
                 std::cout << std::endl;
 #endif
