@@ -19,11 +19,12 @@ csv_cols = [
 
 csv_filename = "output.csv"
 
+
 # turn file into dict with useful info
-def parse_file(filename:str) -> dict:
-    with open(filename, "r") as file:
-        data = {"timeout" : False}
-        for line in file:
+def parse_file(filename: str) -> dict:
+    with open(filename, "r") as infile:
+        data = {"timeout": False}
+        for line in infile:
             match line.strip().split(':'):
                 case ["runtime" as key, time]:
                     data[key] = float(time.strip().split(" ")[0])
@@ -36,26 +37,30 @@ def parse_file(filename:str) -> dict:
     return data
 
 
-#initializes the csv file
+# initializes the csv file
 def init_csv_file():
-    with open(csv_filename, "w", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, csv_cols)
+    with open(csv_filename, "w", newline="") as csv_file:
+        writer = csv.DictWriter(csv_file, csv_cols)
         writer.writeheader()
 
 
 # writes data to csv file as a line
-def append_to_csv(data:dict) -> str:
-    with open(csv_filename, "a", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, csv_cols)
+def append_to_csv(data: dict):
+    with open(csv_filename, "a", newline="") as csv_file:
+        writer = csv.DictWriter(csv_file, csv_cols)
         writer.writerow(data)
 
+
 # main, loops through files
-def main(directory:str):
+def main(directory: str):
     init_csv_file()
     for filename in os.listdir(directory):
         match filename.split("_"):
             # LOG_<solutions>_<TestType>_<domain increases>_<id>_<propagator>.txt
-            case ["LOG", sols, ("B" | "X" | "R") as test, dom, num, ("AdvModulo.txt" | "Modulo.txt" | "Linear.txt") as prop]:
+            case [
+                "LOG", sols, ("B" | "X" | "R") as test, dom, num,
+                ("AdvModulo.txt" | "Modulo.txt" | "Linear.txt") as prop
+            ]:
                 data = parse_file(directory + "\\" + filename) | {
                     "requested solutions": int(sols),
                     "test type": test,
@@ -67,6 +72,7 @@ def main(directory:str):
             case _:
                 print(f"please clean up the output directory, '{filename}' shouldn't be here.")
 
+
 if __name__ == '__main__':
-    file = os.path.abspath(os.path.join(os.getcwd(), "..\GecodeExtension\Out"))
+    file = os.path.abspath(os.path.join(os.getcwd(), "..\\GecodeExtension\\Out"))
     main(file)
