@@ -3,4 +3,7 @@
 **/Debug/
 **/x64/
 **/examples/
+# output and python
 **/OUT/
+**/.idea/
+**/venv/
