@@ -101,7 +101,8 @@ namespace {
                     ret.push_back({ 0, base + dom });
                     for (int terms = minTerms; terms <= 12 - 3 * (base == 5); terms++) {
                         // create test vector
-                        std::vector<int> row(terms + 1);
+                        std::vector<int> row;
+                        row.reserve(terms + 1);
                         row.push_back(0);
                         // loop and add terms
                         int n = 1;
@@ -111,6 +112,7 @@ namespace {
                         }
                         // set first element to c
                         row[0] = n - 1;
+                        row.shrink_to_fit();
                         // add to tests;
                         ret.push_back(row);
                     }
@@ -124,13 +126,14 @@ namespace {
             srand(time(NULL));
             int dom_min, dom_max, terms, c, n = 0;
             for (int i = 0; i < num; i++) {
-                dom_min = 0;
+                dom_min = 1;
                 dom_max = 10 + rand() % 1000;
                 //           domain_min, domain_max
                 ret.push_back({ dom_min, dom_max });
                 // create test vector
-                terms = (rand() % 4) + minTerms;
-                std::vector<int> row(terms + 1);
+                terms = (rand() % 10) + minTerms;
+                std::vector<int> row;
+                row.reserve(terms + 1);
                 row.push_back(0);
                 c = 0;
                 // create terms, updating c
@@ -141,6 +144,7 @@ namespace {
                 }
                 // set first element to c
                 row[0] = c;
+                row.shrink_to_fit();
                 // add to tests;
                 ret.push_back(row);
             }

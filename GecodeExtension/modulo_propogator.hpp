@@ -9,7 +9,7 @@
 
 
 //#define DEBUG false
-#define DEBUG true
+#define DEBUG false
 #define SHORT_CIRCUIT false
 #define LIMIT_DOMAIN false
 #define ADV_MOD true
@@ -302,7 +302,6 @@ namespace Mod {
         if (ax.size() == 0)
             return ES_FAILED;
 
-
 #if LIMIT_DOMAIN
         // check if all coefficients and domains are non-negative
         bool all_pos = true;
@@ -320,6 +319,7 @@ namespace Mod {
         if (!ax.assigned()) {
             // post propagator
             (void) new (home) Modulo(home, ax, c);
+
         }
 
         // return completion
@@ -474,8 +474,10 @@ namespace Mod {
                         std::cout << std::endl;
 #endif
                     } else {
+#if DEBUG
                         PP(" No Intersection ", { C_RED });
                         std::cout << std::endl;
+#endif
                         return ES_FAILED;
                     }
                 }
@@ -490,6 +492,15 @@ namespace Mod {
 #elif DOM_TYPE == 1
                 dom(home, _l.ax->x, i.min(), i.max());
 #endif
+
+                // fail if domain is empty.
+                if (i.min() > _l.ax->x.max() || i.max() < _l.ax->x.min()) {
+#if DEBUG
+                    PP(" No Intersection ", { C_RED });
+                    std::cout << std::endl;
+#endif
+                    return ES_FAILED;
+                }
 
 
 #if DEBUG
@@ -564,7 +575,9 @@ namespace Mod {
             return ES_OK;
         }
 #endif
+#if DEBUG
         PP("End Propagation", {TextF::DC_CYAN});
+#endif
         // otherwise return a fixpoint, the propagator only needs to run once per variable assignment
         return ES_FIX;
     }
