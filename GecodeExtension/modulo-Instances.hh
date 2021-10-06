@@ -123,7 +123,8 @@ namespace {
             break;
         case RANDOM:
             // seed random
-            srand(time(NULL));
+            //srand(time(NULL));
+            srand(1000);
             int dom_min, dom_max, terms, c, n = 0;
             for (int i = 0; i < num; i++) {
                 dom_min = 1;
