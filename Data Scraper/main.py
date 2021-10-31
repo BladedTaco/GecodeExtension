@@ -45,7 +45,7 @@ def init_csv_file():
         writer = csv.DictWriter(csv_file, csv_cols)
         writer.writeheader()
     with open(json_filename, "w", newline="") as json_file:
-        json_file.write("[")
+        json_file.write("[\n")
 
 
 # writes data to csv file as a line
@@ -55,8 +55,8 @@ def append_to_csv(data: dict):
         writer.writerow(data)
     # writes data to json file as well, the last comma needs to be replaced with a ]
     with open(json_filename, "a", newline="") as json_file:
-        json.dump(data, json_file, indent=4)
-        json_file.write(",")
+        json.dump(data, json_file, indent=None)
+        json_file.write(",\n")
 
 
 
