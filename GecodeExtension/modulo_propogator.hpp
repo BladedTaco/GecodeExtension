@@ -12,7 +12,7 @@
 #define DEBUG false
 #define SHORT_CIRCUIT false
 #define LIMIT_DOMAIN false
-#define ADV_MOD true
+#define ADV_MOD false
 #define DBL_BOUND false
 
 // enums weren't doing highlighting, sooooo....

@@ -140,8 +140,8 @@ void run_tests(Options& opt) {
                 if (eq_num == ++eq_counter) {
                     eq_counter = 0;
 
-                    //for (auto const b : { Eq20::PROP_MODULO }) {
-                    for (auto const b : { Eq20::PROP_MODULO, Eq20::PROP_LINEAR }) {
+                    for (auto const b : { Eq20::PROP_MODULO }) {
+                    //for (auto const b : { Eq20::PROP_MODULO, Eq20::PROP_LINEAR }) {
                     //for (auto const b : { Eq20::PROP_LINEAR, Eq20::PROP_MODULO }) {
 
                         // get the output filename
