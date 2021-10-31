@@ -104,7 +104,8 @@ public:
 
 
 void run_tests(Options& opt) {
-    for (auto test_suite : { BASIC, XOR, RANDOM }) {
+    //for (auto test_suite : { BASIC, XOR, RANDOM }) {
+    for (auto test_suite : { RANDOM }) {
         std::vector<std::vector<int>> tests = generate_tests(test_suite, 250);
 
         // init vars

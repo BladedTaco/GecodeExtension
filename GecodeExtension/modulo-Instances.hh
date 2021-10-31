@@ -126,28 +126,32 @@ namespace {
             //srand(time(NULL));
             srand(1000);
             int dom_min, dom_max, terms, c, n = 0;
-            for (int i = 0; i < num; i++) {
-                dom_min = 1;
-                dom_max = 10 + rand() % 1000;
-                //           domain_min, domain_max
-                ret.push_back({ dom_min, dom_max });
-                // create test vector
-                terms = (rand() % 10) + minTerms;
-                std::vector<int> row;
-                row.reserve(terms + 1);
-                row.push_back(0);
-                c = 0;
-                // create terms, updating c
-                for (int j = 0; j < terms; j++) {
-                    n = rand() % 1000;
-                    row.push_back(n);
-                    c += n * (dom_min + (rand() % (dom_max - dom_min)));
+            for (int dom = 0; dom < 10; dom++) {
+                for (int i = 0; i < num; i++) {
+                    dom_min = 1;
+                    dom_max = 10 + rand() % (100 << dom);
+                    //           domain_min, domain_max
+                    ret.push_back({ dom_min, dom_max });
+                    // create test vector
+                    terms = (rand() % 10) + minTerms;
+                    std::vector<int> row;
+                    row.reserve(terms + 1);
+                    row.push_back(0);
+                    c = 0;
+                    // create terms, updating c
+                    for (int j = 0; j < terms; j++) {
+                        n = rand() % 1000;
+                        row.push_back(n);
+                        c += n * (dom_min + (rand() % (dom_max - dom_min)));
+                    }
+                    // set first element to c
+                    row[0] = c;
+                    row.shrink_to_fit();
+                    // add to tests;
+                    ret.push_back(row);
                 }
-                // set first element to c
-                row[0] = c;
-                row.shrink_to_fit();
-                // add to tests;
-                ret.push_back(row);
+                // signfiy domain change repeat
+                ret.push_back({});
             }
             break;
         }

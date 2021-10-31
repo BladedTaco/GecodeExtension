@@ -70,6 +70,10 @@ def main(directory: str):
                 "LOG", sols, ("B" | "X" | "R") as test, dom, num,
                 ("AdvModulo.txt" | "Modulo.txt" | "Linear.txt") as prop
             ]:
+                if test == "R":
+                    dom = int(dom) - 250
+                else:
+                    dom = int(dom) - 10
                 data = parse_file(directory + "\\" + filename) | {
                     "requested solutions": int(sols),
                     "test type": test,
