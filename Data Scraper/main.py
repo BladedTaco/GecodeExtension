@@ -1,6 +1,7 @@
 # reads through the output files from GecodeExtension to turn into csv format
 import os
 import csv
+import json
 
 csv_cols = [
     "propagator type",
@@ -18,6 +19,7 @@ csv_cols = [
 ]
 
 csv_filename = "output.csv"
+json_filename = "output.json"
 
 
 # turn file into dict with useful info
@@ -42,6 +44,8 @@ def init_csv_file():
     with open(csv_filename, "w", newline="") as csv_file:
         writer = csv.DictWriter(csv_file, csv_cols)
         writer.writeheader()
+    with open(json_filename, "w", newline="") as json_file:
+        json_file.write("[")
 
 
 # writes data to csv file as a line
@@ -49,6 +53,11 @@ def append_to_csv(data: dict):
     with open(csv_filename, "a", newline="") as csv_file:
         writer = csv.DictWriter(csv_file, csv_cols)
         writer.writerow(data)
+    # writes data to json file as well, the last comma needs to be replaced with a ]
+    with open(json_filename, "a", newline="") as json_file:
+        json.dump(data, json_file, indent=4)
+        json_file.write(",")
+
 
 
 # main, loops through files
